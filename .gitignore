@@ -1,3 +1,9 @@
 /01_CPPN/output/
-/01_CPPN/figures
+/01_CPPN/figures/
+/01_CPPN/targets/
+
+/01_CPPN/models/__pycache__/
+/02_critical_ising/models/__pycache__/
+/03_adaptiveCA/__pycache__/
+
 /.idea/
