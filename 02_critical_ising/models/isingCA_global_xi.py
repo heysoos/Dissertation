@@ -61,6 +61,8 @@ class Rule(nn.Module):
 
         rand = torch.rand_like(s)
 
+        # you're supposed to go one pixel at a time and not parallelize it, so if the threshold is too low
+        # the statistics start to get funky. For example you can get weird oscillations in certain circumstances.
         dropout_mask = (torch.rand_like(s[0, 0]) > 0.9).unsqueeze(0).unsqueeze(0)
         flip = -2. * torch.logical_and(rand < p, dropout_mask) + 1
 
