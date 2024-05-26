@@ -1,7 +1,10 @@
 import numpy as np
 from math import sqrt
 
+import sys
+sys.path.append('/Users/Heysoos/Documents/Pycharm Projects/Dissertation/01_CPPN/models')
 from cppn import CPPN, Sampler
+
 
 import torch
 import torch.nn as nn
@@ -20,10 +23,6 @@ def totalistic(x, dim2=False):
                      x.transpose(y_idx, x_idx).flip(y_idx) +
                      x.transpose(y_idx, x_idx).flip(x_idx) +
                      x.transpose(y_idx, x_idx).flip(y_idx).flip(x_idx))
-    # if dim2:
-    #     z = z - z.mean()
-    # else:
-    #     z = z - z.mean(x_idx).mean(y_idx).unsqueeze(y_idx).unsqueeze(x_idx)
 
     return z
 
@@ -46,8 +45,8 @@ class Rule(nn.Module):
 
         cppn_net_size = [32, 32, 32]
         dim_z = 16
-        dim_c = 1 #CHANNELS
-        self.cppn = CPPN(cppn_net_size, dim_z, dim_c).cuda().eval()
+        dim_c = 1
+        self.cppn = CPPN(net_size=cppn_net_size, dim_z=dim_z, dim_c=dim_c, dim_in=6 + 1).cuda().eval()
         self.sampler = Sampler()
 
         self.generate_kernel(self.cppn)
@@ -84,7 +83,8 @@ class Rule(nn.Module):
             ks = []
             coords[-1] = 2*torch.randn(1, dim_z).cuda()
             # k = (self.cppn.forward(coords, Rk, Rk).reshape(1, Rk, Rk, dim_c).permute(0, 3, 1, 2) > 0.9).type(torch.cuda.FloatTensor)
-            k = (self.cppn.forward(coords, Rk, Rk).reshape(1, Rk, Rk, dim_c).permute(0, 3, 1, 2))
+            # k = (self.cppn.forward(coords, Rk, Rk).reshape(1, Rk, Rk, dim_c).permute(0, 3, 1, 2))
+            k = (self.cppn.forward(coords).reshape(1, Rk, Rk, dim_c).permute(0, 3, 1, 2))
             k = torch.where(condition, k, null)
             k[condition] -= k[condition].sum() / k[condition].numel()  # subtract inner-circle mean from inner-circle
             k = k.repeat((1, self.channels, 1, 1))
@@ -171,11 +171,6 @@ class CA(nn.Module):
 
         alive_mask = F.max_pool2d(alpha_channel, kernel_size=2 * R + 1, stride=1, padding=R) > alive_thres
         alive_mask = alive_mask[:, :, R:-R, R:-R]
-
-        # death_mask = F.avg_pool2d(alpha_channel, kernel_size=2 * R + 1, stride=1, padding=R) < dead_thres
-        # death_mask = death_mask[:, :, R:-R, R:-R]
-        # return alive_mask & death_mask
-
         return alive_mask
 
     def forward(self, x, update_rate=1):
@@ -198,10 +193,6 @@ class CA(nn.Module):
             out.append(self.rule.transitions[i](p))
         z = torch.stack(out)
 
-
-        # min_idx = torch.argmin(z, dim=0, keepdim=True)
-        # z = torch.gather(z, 0, min_idx)[0]
-
         # sort perceptions my magnitude and take the median value per pixel
         # idx = torch.argsort(z, dim=0)
         # z = torch.gather(z, 0, idx)[self.filters//2]
@@ -210,23 +201,11 @@ class CA(nn.Module):
         z = torch.median(z, dim=0)[0]
         # z = torch.sum(z, dim=0)
 
-        # z = torch.stack(out).mean(0) * update_rate
-
-        # for i in range(len(kernels)):
-        #     z = F.pad(x, (R, R, R, R), 'circular')
-        #     z = F.conv2d(z, weight=kernels[i], bias=bias[i], padding=0)
-        #     z = self.rule.transitions[i](z)
-
         lifemask = self.get_living_mask(x, alive_thres=.1, dead_thres=0.6)
         x = x + (lifemask * z * update_rate)
-        # deathR = 2*R
-        # x = z - F.avg_pool2d(F.pad(z, (deathR, deathR, deathR, deathR), 'circular'), 2 * deathR + 1, padding=0, stride=1) * update_rate
-        # z = x + (z - z.mean(dim=2, keepdim=True).mean(dim=3, keepdim=True))* update_rate
-        # z = x + z * update_rate
-        # x = torch.clamp(z, 0, 255)
-        # x = torch.clamp(z, -127, 128)
+
         x = torch.clamp(x, 0, 1)
-        # x = z
+
         return x
 
     def cleanup(self):
